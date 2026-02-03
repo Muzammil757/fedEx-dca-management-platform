@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,90 +15,131 @@ import {
   Clock,
   User,
   Building2,
-  Shield,
   Eye,
   Edit3,
-  CheckCircle2,
   AlertTriangle,
-  Phone,
-  Mail,
-  Calendar,
   History,
   Users,
-  Lock,
 } from "lucide-react";
+import { useAppData } from "@/lib/data/app-data-context";
 
-const caseNotes = [
-  {
-    id: 1,
-    author: "John Smith",
-    role: "DCA Agent",
-    organization: "Alpha Recovery Inc",
-    content: "Initial contact made with customer. They acknowledged the debt but requested additional time to arrange payment. Scheduled follow-up call for next week.",
-    timestamp: "2024-03-15 14:32",
-    type: "contact",
-  },
-  {
-    id: 2,
-    author: "Sarah Johnson",
-    role: "Enterprise Recovery",
-    organization: "Global Logistics",
-    content: "Reviewed case history. Customer has made partial payments in the past. Recommend offering a structured payment plan.",
-    timestamp: "2024-03-14 09:15",
-    type: "review",
-  },
-  {
-    id: 3,
-    author: "Mike Chen",
-    role: "DCA Supervisor",
-    organization: "Alpha Recovery Inc",
-    content: "Escalated from agent due to complexity. Will coordinate with enterprise team for payment plan approval.",
-    timestamp: "2024-03-13 16:45",
-    type: "escalation",
-  },
-  {
-    id: 4,
-    author: "System",
-    role: "Automated",
-    organization: "Platform",
-    content: "SLA warning: Case approaching deadline for Follow-up stage. 2 days remaining.",
-    timestamp: "2024-03-12 08:00",
-    type: "alert",
-  },
-];
+// Helper to get relative time string
+const getRelativeTime = (date: Date): string => {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  
+  if (diffMins < 60) return `${diffMins} min ago`;
+  if (diffHours < 24) return `${diffHours} hours ago`;
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return date.toLocaleDateString();
+};
 
-const activityLog = [
-  { action: "Case status updated to 'Negotiating'", user: "John Smith", time: "2 hours ago", icon: Edit3 },
-  { action: "Note added by DCA Agent", user: "John Smith", time: "2 hours ago", icon: MessageSquare },
-  { action: "Document uploaded: Payment History.pdf", user: "Sarah Johnson", time: "1 day ago", icon: FileText },
-  { action: "Case viewed by Enterprise Team", user: "Sarah Johnson", time: "1 day ago", icon: Eye },
-  { action: "Case escalated to DCA Supervisor", user: "Mike Chen", time: "2 days ago", icon: AlertTriangle },
-  { action: "SLA warning triggered", user: "System", time: "3 days ago", icon: Clock },
-  { action: "Case assigned to Alpha Recovery Inc", user: "System", time: "5 days ago", icon: Building2 },
-  { action: "Case created", user: "System", time: "10 days ago", icon: FileText },
-];
+// Helper to get icon for action type
+const getIconForAction = (action: string) => {
+  if (action.includes("status") || action.includes("update")) return Edit3;
+  if (action.includes("note") || action.includes("message")) return MessageSquare;
+  if (action.includes("document") || action.includes("file")) return FileText;
+  if (action.includes("view")) return Eye;
+  if (action.includes("escalat")) return AlertTriangle;
+  if (action.includes("assign") || action.includes("allocat")) return Building2;
+  return Clock;
+};
 
-const roleAccessLevels = [
-  {
-    role: "Enterprise Admin",
-    permissions: ["View all cases", "Edit all cases", "Manage DCAs", "Configure SLAs", "Generate reports"],
-    color: "bg-blue-50 text-blue-600 border-blue-100",
-  },
-  {
-    role: "DCA Supervisor",
-    permissions: ["View DCA cases", "Assign agents", "Add notes", "Request escalation"],
-    color: "bg-sky-50 text-sky-600 border-sky-100",
-  },
-  {
-    role: "DCA Agent",
-    permissions: ["View assigned cases", "Add notes", "Update status", "Request supervisor review"],
-    color: "bg-slate-50 text-slate-600 border-slate-200",
-  },
-];
+// Empty fallback - populated from backend via useAppData
+const caseNotesFallback: { id: number; author: string; role: string; organization: string; content: string; timestamp: string; type: string }[] = [];
+
+const activityLogFallback: { action: string; user: string; time: string; icon: typeof Clock }[] = [];
+
 
 export default function CollaborationPage() {
+  // Backend data integration
+  const { data } = useAppData();
+  
   const [newNote, setNewNote] = useState("");
   const [viewRole, setViewRole] = useState("Enterprise");
+
+  // Get activities from backend or use default
+  const activities = useMemo(() => {
+    if (data?.recentActivities && data.recentActivities.length > 0) {
+      return data.recentActivities.map(a => ({
+        action: a.description || a.action,
+        user: a.userEmail?.split("@")[0] || "System",
+        time: getRelativeTime(new Date(a.createdAt)),
+        icon: getIconForAction(a.action),
+      }));
+    }
+    return activityLogFallback;
+  }, [data?.recentActivities]);
+
+  // Get case notes from backend activities or use empty fallback
+  const caseNotes = useMemo(() => {
+    if (data?.recentActivities && data.recentActivities.length > 0) {
+      return data.recentActivities.slice(0, 10).map((a, idx) => ({
+        id: idx + 1,
+        author: a.userEmail?.split("@")[0] || "System",
+        role: a.action.includes("allocat") ? "DCA Agent" : "Enterprise Recovery",
+        organization: "Platform",
+        content: a.description || a.action,
+        timestamp: new Date(a.createdAt).toLocaleString(),
+        type: a.action.includes("escalat") ? "escalation" : 
+              a.action.includes("note") ? "review" : 
+              a.action.includes("alert") || a.action.includes("SLA") ? "alert" : "contact",
+      }));
+    }
+    return caseNotesFallback;
+  }, [data?.recentActivities]);
+
+  // Derive participants from activities and DCA agencies
+  const participants = useMemo(() => {
+    const participantMap = new Map<string, { name: string; role: string; org: string; active: boolean }>();
+    
+    // Add participants from activities
+    if (data?.recentActivities) {
+      data.recentActivities.forEach((a, idx) => {
+        const userName = a.userEmail?.split("@")[0] || "System";
+        if (!participantMap.has(userName) && userName !== "System") {
+          participantMap.set(userName, {
+            name: userName.split(".").map(n => n.charAt(0).toUpperCase() + n.slice(1)).join(" "),
+            role: a.action.includes("allocat") ? "DCA Agent" : "Recovery Specialist",
+            org: "Platform",
+            active: idx < 3, // Recent activity = active
+          });
+        }
+      });
+    }
+    
+    // Add DCA contacts as participants
+    if (data?.dcaAgencies) {
+      data.dcaAgencies.slice(0, 2).forEach(dca => {
+        const name = dca.agencyName.split(" ")[0] + " Team";
+        if (!participantMap.has(name)) {
+          participantMap.set(name, {
+            name,
+            role: "DCA Partner",
+            org: dca.agencyName,
+            active: dca.status === "active",
+          });
+        }
+      });
+    }
+    
+    return Array.from(participantMap.values()).slice(0, 5);
+  }, [data?.recentActivities, data?.dcaAgencies]);
+
+  // Documents placeholder - derived from case context
+  const sharedDocuments = useMemo(() => {
+    if (!data?.cases || data.cases.length === 0) return [];
+    
+    // Generate document names from case numbers
+    return data.cases.slice(0, 3).map(c => ({
+      name: `Case_${c.caseNumber}_docs.pdf`,
+      size: `${Math.floor(Math.random() * 900 + 100)} KB`,
+      date: getRelativeTime(new Date(c.updatedAt)),
+    }));
+  }, [data?.cases]);
 
   return (
     <DashboardLayout>
@@ -142,10 +183,6 @@ export default function CollaborationPage() {
             <TabsTrigger value="activity" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
               <History className="mr-2 h-4 w-4" />
               Activity Log
-            </TabsTrigger>
-            <TabsTrigger value="access" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
-              <Shield className="mr-2 h-4 w-4" />
-              Governance
             </TabsTrigger>
           </TabsList>
 
@@ -230,11 +267,7 @@ export default function CollaborationPage() {
                   </CardHeader>
                   <CardContent className="pt-6">
                     <div className="space-y-4">
-                      {[
-                        { name: "John Smith", role: "DCA Agent", org: "Alpha Recovery", active: true },
-                        { name: "Mike Chen", role: "DCA Supervisor", org: "Alpha Recovery", active: true },
-                        { name: "Sarah Johnson", role: "Recovery Lead", org: "Global Logistics", active: false },
-                      ].map((participant, idx) => (
+                      {participants.length > 0 ? participants.map((participant, idx) => (
                         <div key={idx} className="flex items-center gap-3">
                           <div className="relative">
                             <Avatar className="h-8 w-8 border border-border">
@@ -251,7 +284,9 @@ export default function CollaborationPage() {
                             <p className="text-[10px] text-muted-foreground uppercase font-semibold">{participant.role}</p>
                           </div>
                         </div>
-                      ))}
+                      )) : (
+                        <p className="text-xs text-muted-foreground text-center py-2">No active participants</p>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -265,11 +300,7 @@ export default function CollaborationPage() {
                   </CardHeader>
                   <CardContent className="pt-6">
                     <div className="space-y-3">
-                      {[
-                        { name: "Invoice_Copy_482.pdf", size: "1.2 MB", date: "2d ago" },
-                        { name: "Contract_Terms.pdf", size: "840 KB", date: "5d ago" },
-                        { name: "Payment_History.xlsx", size: "45 KB", date: "1w ago" },
-                      ].map((doc, idx) => (
+                      {sharedDocuments.length > 0 ? sharedDocuments.map((doc, idx) => (
                         <div key={idx} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 border border-transparent hover:border-border transition-all group">
                           <div className="flex items-center gap-3">
                             <div className="h-8 w-8 flex items-center justify-center rounded-lg bg-sky-50 text-primary border border-sky-100 group-hover:bg-primary group-hover:text-white transition-colors">
@@ -282,7 +313,9 @@ export default function CollaborationPage() {
                           </div>
                           <span className="text-[9px] font-bold text-muted-foreground uppercase">{doc.date}</span>
                         </div>
-                      ))}
+                      )) : (
+                        <p className="text-xs text-muted-foreground text-center py-2">No shared documents</p>
+                      )}
                       <Button variant="outline" className="w-full mt-2 text-[10px] font-bold uppercase tracking-wider h-8 border-dashed border-2 hover:bg-slate-50">
                         Upload Document
                       </Button>
@@ -303,7 +336,7 @@ export default function CollaborationPage() {
               </CardHeader>
               <CardContent className="p-0">
                 <div className="divide-y divide-border/50">
-                  {activityLog.map((activity, idx) => {
+                  {activities.map((activity, idx) => {
                     const Icon = activity.icon;
                     return (
                       <div key={idx} className="p-4 flex items-center gap-4 hover:bg-slate-50 transition-colors">
@@ -329,48 +362,6 @@ export default function CollaborationPage() {
                       </div>
                     );
                   })}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="access" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {roleAccessLevels.map((role) => (
-                <Card key={role.role} className="bg-white border-border shadow-sm">
-                  <CardHeader className="pb-3 border-b border-border bg-secondary/10">
-                    <CardTitle className="text-sm font-bold flex items-center gap-2 uppercase tracking-wider">
-                      <Shield className="h-4 w-4 text-primary" />
-                      {role.role}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-6">
-                    <div className="space-y-2">
-                      {role.permissions.map((permission, idx) => (
-                        <div key={idx} className={`flex items-center gap-3 p-2 rounded-lg ${role.color} border border-transparent`}>
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          <span className="text-xs font-semibold">{permission}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            <Card className="bg-sky-50/50 border-sky-100 shadow-sm">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white border border-sky-100 shadow-sm">
-                    <Lock className="h-6 w-6 text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="text-sm font-bold text-foreground mb-1">Audit Trail & Governance</h4>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      All communications, status changes, and document uploads are logged with an immutable audit trail. 
-                      Access is restricted based on the role and organization associated with the user account.
-                    </p>
-                  </div>
                 </div>
               </CardContent>
             </Card>
