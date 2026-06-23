@@ -2,6 +2,18 @@
 
 Live Demo: https://fed-ex-dca-managment.vercel.app
 
+## Demo Credentials
+
+### Admin Access
+Email: admin@yourcompany.com
+Password: AdminSecure123!
+
+### DCA Access
+Email: dca@partner.com
+Password: DcaSecure456!
+
+> These are demo accounts provided for evaluation and testing purposes.
+
 ## Overview
 A full-stack debt collection management platform developed for the FedEx Smart Hackathon (Top 15 Finalist, IIT Madras). The platform enables case allocation, SLA monitoring, DCA performance tracking, analytics, and collaboration workflows.
 
