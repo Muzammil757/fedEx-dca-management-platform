@@ -1,5 +1,5 @@
 "use client";
-
+import { Suspense } from "react";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -204,8 +204,7 @@ function EmptyState({ message, onRefresh }: { message: string; onRefresh: () => 
   );
 }
 
-export default function SLAMonitoringPage() {
-  // Get URL search params for pre-filtering
+function SLAMonitoringContent() {  // Get URL search params for pre-filtering
   const searchParams = useSearchParams();
   const filterParam = searchParams.get("filter");
   
@@ -1824,8 +1823,16 @@ export default function SLAMonitoringPage() {
               )}
             </div>
           </SheetContent>
-        </Sheet>
+                </Sheet>
       </div>
     </DashboardLayout>
+  );
+}
+
+export default function SLAMonitoringPage() {
+  return (
+    <Suspense fallback={<LoadingSkeleton />}>
+      <SLAMonitoringContent />
+    </Suspense>
   );
 }
